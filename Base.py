@@ -1,6 +1,17 @@
 import streamlit as st
 import pandas as pd
 
+def check_dates(data):
+    """检查时间交叉的逻辑"""
+    issues = []
+    for i in range(len(data)):
+        start, end = str(data.iloc[i][0]), str(data.iloc[i][1])
+        if start >= end :
+            issues.append(f"开始时间晚于结束时间：行 {i+1} ")
+            issues.append(f"出错时间为："+start+"  " + end)
+    return issues
+
+
 def check_cross_dates(data):
     """检查时间交叉的逻辑"""
     issues = []
@@ -69,20 +80,26 @@ def check_file(file_name):
         st.write(work_data)
         st.write(proj_data)
         
+        base_issues=check_dates(work_data)
+        base_issues1=check_dates(proj_data)
         work_issues=check_cross_dates(work_data)
-        proj_issues=check_cross_dates(proj_data)
         proj_within_work_issues=check_project_within_work(work_data,proj_data)
 
         # 显示结果
+        if base_issues:
+            st.error("\n".join(base_issues))
+        else:
+            st.success("工作经历日期基本检查无问题")
+
+        if base_issues1:
+            st.error("\n".join(base_issues1))
+        else:
+            st.success("项目经历日期基本检查无问题")
+
         if work_issues:
             st.error("\n".join(work_issues))
         else:
-            st.success("工作经历无问题")
-
-        if proj_issues:
-            st.error("\n".join(proj_issues))
-        else:
-            st.success("项目经历无问题")
+            st.success("工作经历检查无问题")
 
         if proj_within_work_issues:
             st.error("\n".join(proj_within_work_issues))
