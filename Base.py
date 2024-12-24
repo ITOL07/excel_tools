@@ -36,7 +36,7 @@ def check_project_within_work(work_data, proj_data):
                 in_work_time = True
                 break
         if not in_work_time:
-            issues.append(f"项目不在工作时间范围内：行 {i+2}")
+            issues.append(f"项目不在工作时间范围内：行 {i+2} 开始时间：" + proj_start + " ，结束时间：" + proj_end)
     return issues
 
 def check_file(file_name):  
