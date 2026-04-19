@@ -75,89 +75,148 @@ def check_cross_dates(data):
     return issues
 
 def check_project_within_work(work_data, proj_data):
-    """检查项目时间是否在工作时间内"""
+    """检查项目时间是否在工作时间内（修复版：安全、无KeyError、时间正确比较）"""
     issues = []
+
+    # 安全检查：确保数据有至少两列
+    if work_data.shape[1] < 2 or proj_data.shape[1] < 2:
+        issues.append("错误：工作时间/项目时间数据必须包含至少两列（开始、结束）")
+        return issues
+
+    # 遍历项目行
     for i, proj_row in proj_data.iterrows():
-        proj_start, proj_end = str(proj_row[0]), str(proj_row[1])
-        in_work_time = False
-        for _, work_row in work_data.iterrows():
-            work_start, work_end = str(work_row[0]), str(work_row[1])
-            if proj_start >= work_start and proj_end <= work_end:
-                in_work_time = True
-                break
-        if not in_work_time:
-            issues.append(f"项目不在工作时间范围内：行 {i+2} 开始时间：" + proj_start + " ，结束时间：" + proj_end)
+        try:
+            # ✅ 安全取时间（绝对不会报 KeyError）
+            proj_start_val = proj_row.iloc[0]
+            proj_end_val = proj_row.iloc[1]
+
+            # ✅ 转成真正的时间类型
+            proj_start = pd.to_datetime(proj_start_val, errors="coerce")
+            proj_end = pd.to_datetime(proj_end_val, errors="coerce")
+
+            # 检查时间是否有效
+            if pd.isna(proj_start) or pd.isna(proj_end):
+                issues.append(f"项目时间格式错误/为空：行 {i+2}")
+                continue
+
+            in_work_time = False
+
+            # 遍历工作时间
+            for _, work_row in work_data.iterrows():
+                work_start_val = work_row.iloc[0]
+                work_end_val = work_row.iloc[1]
+
+                work_start = pd.to_datetime(work_start_val, errors="coerce")
+                work_end = pd.to_datetime(work_end_val, errors="coerce")
+
+                if pd.isna(work_start) or pd.isna(work_end):
+                    continue
+
+                # ✅ 正确的时间范围判断
+                if proj_start >= work_start and proj_end <= work_end:
+                    in_work_time = True
+                    break
+
+            if not in_work_time:
+                issues.append(f"项目不在工作时间范围内：行 {i+2} 开始时间：{proj_start_val}，结束时间：{proj_end_val}")
+
+        except Exception as e:
+            issues.append(f"项目行 {i+2} 数据异常：{str(e)}")
+
     return issues
 
 def check_file(file_name):  
-    # 读取Excel文件
-    #file_path = 'C:/Users/nantian/Desktop/2024111-人员输送建议信息模板V1.9（更新首次参加IT领域工作时间）--待修改.xlsx'
+    """检查Excel文件（修复版：安全、无崩溃、无KeyError）"""
+    try:
+        # 1. 安全读取Excel
+        df = pd.read_excel(file_name)
+    except Exception as e:
+        st.error(f"读取Excel失败：{str(e)}")
+        return
 
-    #df = pd.read_excel(file_name,sheet_name="人员输送建议信息模板")
-    df = pd.read_excel(file_name)
-    
-    # 查找“工作经历”和“项目经历”的索引
+    # 2. 初始化索引（统一管理，避免未定义报错）
     work_start_index = None
     work_end_index = None
-
     proj_start_index = None
     proj_end_index = None
 
+    # 3. 查找关键标记（一次遍历完成，更安全高效）
     for index, row in df.iterrows():
-        if '工作经历' in str(row.values):
+        row_str = str(row.values).lower()
+        
+        if "工作经历" in str(row.values):
             work_start_index = index
-            break
-
-    for index, row in df.iterrows():
-        if '项目经历' in str(row.values):
+        
+        if "项目经历" in str(row.values):
             work_end_index = index
             proj_start_index = index + 1
-            break
-
-    for index, row in df.iterrows():
-        if '技术特长' in str(row.values):
+        
+        if "技术特长" in str(row.values):
             proj_end_index = index
-            break
-            
-    # 检查是否找到了起始和结束索引
-    if work_start_index is not None and work_end_index is not None and proj_start_index is not None and proj_end_index is not None:
-        # 读取“工作经历”和“项目经历”之间的行,只要前两列
-        work_data = df.iloc[work_start_index + 2:work_end_index,[0,1]]
-        proj_data = df.iloc[proj_start_index + 1:proj_end_index,[0,1]]
-        
-        work_data = work_data.dropna()
-        proj_data = proj_data.dropna()
-        st.write(work_data)
-        st.write(proj_data)
-        
-        base_issues=check_dates(work_data)
-        base_issues1=check_dates(proj_data)
-        work_issues=check_cross_dates(work_data)
-        proj_within_work_issues=check_project_within_work(work_data,proj_data)
+            break  # 找到最后一个标记就退出
 
-        # 显示结果
-        if base_issues:
-            st.error("\n".join(base_issues))
-        else:
-            st.success("工作经历日期基本检查无问题")
+    # 4. 安全判断：所有索引必须找到
+    if None in [work_start_index, work_end_index, proj_start_index, proj_end_index]:
+        st.error("❌ 未能找到【工作经历】【项目经历】【技术特长】标记，请检查Excel格式！")
+        return
 
-        if base_issues1:
-            st.error("\n".join(base_issues1))
-        else:
-            st.success("项目经历日期基本检查无问题")
+    # 5. 安全截取数据（防止索引错误）
+    try:
+        work_data = df.iloc[work_start_index + 2 : work_end_index, [0, 1]]
+        proj_data = df.iloc[proj_start_index + 1 : proj_end_index, [0, 1]]
+    except:
+        st.error("❌ 数据区域截取失败，请检查Excel格式是否正确")
+        return
 
-        if work_issues:
-            st.error("\n".join(work_issues))
-        else:
-            st.success("工作经历检查无问题")
+    # 6. 清洗空数据 + 安全判断
+    work_data = work_data.dropna().reset_index(drop=True)
+    proj_data = proj_data.dropna().reset_index(drop=True)
 
-        if proj_within_work_issues:
-            st.error("\n".join(proj_within_work_issues))
-        else:
-            st.success("项目时间包含在工作时间范围内")    
+    # 显示数据
+    st.subheader("📌 工作经历数据")
+    st.dataframe(work_data)
+    
+    st.subheader("📌 项目经历数据")
+    st.dataframe(proj_data)
+
+    # 7. 空数据判断（避免空表传入函数报错）
+    if work_data.empty:
+        st.warning("⚠️ 工作经历数据为空")
+    if proj_data.empty:
+        st.warning("⚠️ 项目经历数据为空")
+
+    # ================= 调用你之前修复的检查函数 =================
+    base_issues = check_dates(work_data)
+    base_issues1 = check_dates(proj_data)
+    work_issues = check_cross_dates(work_data)
+    proj_within_work_issues = check_project_within_work(work_data, proj_data)
+
+    # 8. 输出结果
+    st.subheader("✅ 检查结果")
+    
+    if base_issues:
+        st.error("\n".join(base_issues))
     else:
-        st.write("未能找到'工作经历'或'项目经历'的标记。")
+        st.success("工作经历日期基本检查无问题")
 
+    if base_issues1:
+        st.error("\n".join(base_issues1))
+    else:
+        st.success("项目经历日期基本检查无问题")
+
+    if work_issues:
+        st.error("\n".join(work_issues))
+    else:
+        st.success("工作经历无时间交叉")
+
+    if proj_within_work_issues:
+        st.error("\n".join(proj_within_work_issues))
+    else:
+        st.success("项目时间都在工作时间范围内")
+
+    except Exception as e:
+        st.error(f"程序运行异常：{str(e)}")
+    
 # 页面标题和图标
 st.set_page_config(page_title="日期检查工具", page_icon=":file-ear-docx:")
 
