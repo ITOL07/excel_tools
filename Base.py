@@ -213,9 +213,6 @@ def check_file(file_name):
         st.error("\n".join(proj_within_work_issues))
     else:
         st.success("项目时间都在工作时间范围内")
-
-    except Exception as e:
-        st.error(f"程序运行异常：{str(e)}")
     
 # 页面标题和图标
 st.set_page_config(page_title="日期检查工具", page_icon=":file-ear-docx:")
