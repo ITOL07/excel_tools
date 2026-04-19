@@ -2,26 +2,76 @@ import streamlit as st
 import pandas as pd
 
 def check_dates(data):
-    """检查时间交叉的逻辑"""
     issues = []
+    
+    # 安全检查：确保DataFrame至少有2列
+    if data.shape[1] < 2:
+        issues.append("错误：数据必须包含至少两列（开始时间、结束时间）")
+        return issues
+
     for i in range(len(data)):
-        start, end = str(data.iloc[i][0]), str(data.iloc[i][1])
-        if start >= end :
-            issues.append(f"开始时间晚于结束时间：行 {i+1} ")
-            issues.append(f"出错时间为："+start+"  " + end)
+        try:
+            # ✅ 安全取第1列、第2列（不会触发KeyError）
+            start_val = data.iloc[i, 0]
+            end_val = data.iloc[i, 1]
+
+            # 转成时间类型（正确比较大小）
+            start = pd.to_datetime(start_val, errors="coerce")
+            end = pd.to_datetime(end_val, errors="coerce")
+
+            # 空值检查
+            if pd.isna(start) or pd.isna(end):
+                issues.append(f"时间格式错误或为空：行 {i+1}")
+                continue
+
+            # ✅ 正确的时间比较
+            if start >= end:
+                issues.append(f"开始时间晚于结束时间：行 {i+1}")
+                issues.append(f"出错时间为：{start_val}  |  {end_val}")
+
+        except Exception as e:
+            issues.append(f"行 {i+1} 数据异常：{str(e)}")
+
     return issues
 
 
 def check_cross_dates(data):
-    """检查时间交叉的逻辑"""
     issues = []
+    
+    # 安全检查：确保至少有2列
+    if data.shape[1] < 2:
+        issues.append("错误：数据必须包含至少两列（开始时间、结束时间）")
+        return issues
+
+    # 遍历所有时间对
     for i in range(len(data)):
         for j in range(i + 1, len(data)):
-            start1, end1 = str(data.iloc[i][0]), str(data.iloc[i][1])
-            start2, end2 = str(data.iloc[j][0]), str(data.iloc[j][1])
-            if start1 <= end2 and start2 <= end1:
-                issues.append(f"时间交叉：行 {i+1} 和行 {j+1} ")
-                issues.append(f"交叉时间为："+start1+"  " + end1+ "  " + start2 +"  " +end2)
+            try:
+                # ✅ 绝对安全取值，不会报 KeyError
+                start1_val = data.iloc[i, 0]
+                end1_val = data.iloc[i, 1]
+                start2_val = data.iloc[j, 0]
+                end2_val = data.iloc[j, 1]
+
+                # ✅ 转成时间类型（正确判断交叉）
+                start1 = pd.to_datetime(start1_val, errors="coerce")
+                end1 = pd.to_datetime(end1_val, errors="coerce")
+                start2 = pd.to_datetime(start2_val, errors="coerce")
+                end2 = pd.to_datetime(end2_val, errors="coerce")
+
+                # 时间格式错误直接跳过并提示
+                if pd.isna(start1) or pd.isna(end1) or pd.isna(start2) or pd.isna(end2):
+                    issues.append(f"行 {i+1} 或 行 {j+1} 时间格式错误/为空")
+                    continue
+
+                # ✅ 正确的时间交叉判断
+                if start1 < end2 and start2 < end1:
+                    issues.append(f"时间交叉：行 {i+1} 和 行 {j+1}")
+                    issues.append(f"交叉时间为：{start1_val}  {end1_val}  |  {start2_val}  {end2_val}")
+
+            except Exception as e:
+                issues.append(f"行 {i+1} 与 行 {j+1} 数据异常：{str(e)}")
+
     return issues
 
 def check_project_within_work(work_data, proj_data):
