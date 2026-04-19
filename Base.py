@@ -126,74 +126,62 @@ def check_project_within_work(work_data, proj_data):
     return issues
 
 def check_file(file_name):  
-    """检查Excel文件（修复版：安全、无崩溃、无KeyError）"""
     try:
-        # 1. 安全读取Excel
         df = pd.read_excel(file_name)
     except Exception as e:
         st.error(f"读取Excel失败：{str(e)}")
         return
 
-    # 2. 初始化索引（统一管理，避免未定义报错）
     work_start_index = None
     work_end_index = None
     proj_start_index = None
     proj_end_index = None
 
-    # 3. 查找关键标记（一次遍历完成，更安全高效）
+    # 🔥 关键修复：一次循环找完所有标记，不乱序
     for index, row in df.iterrows():
-        row_str = str(row.values).lower()
-        
-        if "工作经历" in str(row.values):
+        cell = str(row.values).strip()
+
+        # 匹配工作经历（支持长标题）
+        if "工作经历" in cell and work_start_index is None:
             work_start_index = index
-        
-        if "项目经历" in str(row.values):
+
+        # 匹配项目经历
+        if "项目经历" in cell and work_end_index is None:
             work_end_index = index
-            proj_start_index = index + 1
-        
-        if "技术特长" in str(row.values):
+            proj_start_index = index
+
+        # 匹配技术特长
+        if "技术特长" in cell:
             proj_end_index = index
-            break  # 找到最后一个标记就退出
+            break  # 找到最后一个标记就停
 
-    # 4. 安全判断：所有索引必须找到
-    if None in [work_start_index, work_end_index, proj_start_index, proj_end_index]:
-        st.error("❌ 未能找到【工作经历】【项目经历】【技术特长】标记，请检查Excel格式！")
+    # 打印定位信息，方便你看问题
+    st.write("工作经历行：", work_start_index)
+    st.write("项目经历行：", work_end_index)
+    st.write("技术特长行：", proj_end_index)
+
+    if None in [work_start_index, work_end_index, proj_end_index]:
+        st.error("未找到 工作经历/项目经历/技术特长 标记")
         return
 
-    # 5. 安全截取数据（防止索引错误）
-    try:
-        work_data = df.iloc[work_start_index + 2 : work_end_index, [0, 1]]
-        proj_data = df.iloc[proj_start_index + 1 : proj_end_index, [0, 1]]
-    except:
-        st.error("❌ 数据区域截取失败，请检查Excel格式是否正确")
-        return
+    # 🔥 再微调偏移量（根据你的实际模板）
+    work_data = df.iloc[work_start_index + 1: work_end_index, [0, 1]]
+    proj_data = df.iloc[proj_start_index + 1: proj_end_index, [0, 1]]
 
-    # 6. 清洗空数据 + 安全判断
-    work_data = work_data.dropna().reset_index(drop=True)
-    proj_data = proj_data.dropna().reset_index(drop=True)
+    work_data = work_data.dropna()
+    proj_data = proj_data.dropna()
 
-    # 显示数据
-    st.subheader("📌 工作经历数据")
+    st.subheader("工作经历")
     st.dataframe(work_data)
-    
-    st.subheader("📌 项目经历数据")
+    st.subheader("项目经历")
     st.dataframe(proj_data)
 
-    # 7. 空数据判断（避免空表传入函数报错）
-    if work_data.empty:
-        st.warning("⚠️ 工作经历数据为空")
-    if proj_data.empty:
-        st.warning("⚠️ 项目经历数据为空")
-
-    # ================= 调用你之前修复的检查函数 =================
+    # 下面检查逻辑不变
     base_issues = check_dates(work_data)
     base_issues1 = check_dates(proj_data)
     work_issues = check_cross_dates(work_data)
     proj_within_work_issues = check_project_within_work(work_data, proj_data)
 
-    # 8. 输出结果
-    st.subheader("✅ 检查结果")
-    
     if base_issues:
         st.error("\n".join(base_issues))
     else:
