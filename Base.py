@@ -165,8 +165,8 @@ def check_file(file_name):
         return
 
     # 🔥 再微调偏移量（根据你的实际模板）
-    work_data = df.iloc[work_start_index + 1: work_end_index, [0, 1]]
-    proj_data = df.iloc[proj_start_index + 1: proj_end_index, [0, 1]]
+    work_data = df.iloc[work_start_index + 2: work_end_index, [0, 1]]
+    proj_data = df.iloc[proj_start_index + 2: proj_end_index, [0, 1]]
 
     work_data = work_data.dropna()
     proj_data = proj_data.dropna()
